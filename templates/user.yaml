@@ -16,6 +16,12 @@ rbac:
           description: be able to use workspace
           resource_paths: [/workspace]
           role_ids: [workspace_user]
+        - id: zone1_access
+          description: Access data in zone 1 for logged in user
+          resource_paths: [/programs/jnkns/projects/jenkins, /programs/DEV/projects/test]
+          role_ids: [read_access_role]
+
+    all_users_policies: [zone1_access]
 
     resources:
         - name: 'data_file'
@@ -48,6 +54,13 @@ rbac:
                 action:
                     service: 'fence'
                     method: 'file_upload'
+        - id: read_access_role
+            description: 'Read Access'
+            permissions:
+              - id: read_access
+                action:
+                  service: '*'
+                  method: read
         - id: workspace_user
           permissions:
           - action: {method: access, service: jupyterhub}
