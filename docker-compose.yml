@@ -5,7 +5,7 @@ services:
     networks:
       - devnet
     volumes:
-      - "psqldata:/var/lib/postgresql/data"
+      - "psqldata6:/var/lib/postgresql/data"
       - "./scripts/postgres_init.sql:/docker-entrypoint-initdb.d/postgres_init.sql"
     restart: unless-stopped
     healthcheck:
@@ -13,11 +13,13 @@ services:
         interval: 60s
         timeout: 5s
         retries: 3
+    environment:
+      - POSTGRES_PASSWORD=password
     #
     # uncomment this to make postgres available from the container host - ex:
     #    psql -h localhost -d fence -U fence_user
-    #ports:
-    #  - 5432:5432
+    ports:
+      - 5432:5432
   indexd-service:
     image: "quay.io/cdis/indexd:master"
     command: bash indexd_setup.sh
@@ -37,13 +39,17 @@ services:
     depends_on:
       - postgres
   fence-service:
-    image: "quay.io/cdis/fence:master"
+#    image: "my-fence:latest"
     command: bash /var/www/fence/fence_setup.sh
+    build:
+      context: /Users/rmaheshwari/Documents/CVB/code/fence
+      dockerfile: dev.Dockerfile
     container_name: fence-service
     networks:
       - devnet
     volumes:
-      - ./Secrets/fence-config.yaml:/var/www/fence/fence-config.yaml
+      - /Users/rmaheshwari/.gen3/fence/fence-config.yaml:/var/www/fence/fence-config.yaml
+      - /Users/rmaheshwari/Documents/CVB/code/fence:/var/www/fence/.
       - ./Secrets/user.yaml:/var/www/fence/user.yaml
       - ./Secrets/TLS/service.crt:/usr/local/share/ca-certificates/cdis-ca.crt
       - ./Secrets/fenceJwtKeys:/fence/keys
@@ -58,8 +64,11 @@ services:
     depends_on:
       - postgres
   arborist-service:
-    image: "quay.io/cdis/arborist:master"
+#    image: "local-arborist:latest"
     container_name: arborist-service
+    build:
+      context: /Users/rmaheshwari/go/src/github.com/uc-cdis/arborist
+      dockerfile: Dockerfile
     entrypoint: bash /go/src/github.com/uc-cdis/arborist/arborist_setup.sh
     networks:
       - devnet
@@ -81,8 +90,11 @@ services:
     depends_on:
       - postgres
   peregrine-service:
-    image: "quay.io/cdis/peregrine:master"
+#    image: "local-peregrine:latest"
     container_name: peregrine-service
+    build:
+      context: /Users/rmaheshwari/Documents/CVB/code/peregrine
+      dockerfile: dev.Dockerfile
     networks:
       - devnet
     volumes:
@@ -92,8 +104,9 @@ services:
       - ./Secrets/TLS/service.crt:/usr/local/share/ca-certificates/cdis-ca.crt
       - ./scripts/peregrine_setup.sh:/peregrine_setup.sh
       - ./datadictionary/gdcdictionary/schemas:/schemas_dir
+      - /Users/rmaheshwari/Documents/CVB/code/peregrine:/var/www/peregrine/.
     environment: &env
-      DICTIONARY_URL: https://s3.amazonaws.com/dictionary-artifacts/datadictionary/develop/schema.json
+      DICTIONARY_URL: https://s3.amazonaws.com/dictionary-artifacts/bhcdictionary/2.0.1/schema.json
       # PATH_TO_SCHEMA_DIR: /schemas_dir
       REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
     healthcheck:
@@ -106,12 +119,16 @@ services:
       - postgres
       - sheepdog-service
   sheepdog-service:
-    image: "quay.io/cdis/sheepdog:master"
+#    image: "local-sheepdog:latest"
+    build:
+      context: /Users/rmaheshwari/Documents/CVB/code/sheepdog
+      dockerfile: dev.Dockerfile
     command: bash /sheepdog_setup.sh
     container_name: sheepdog-service
     networks:
       - devnet
     volumes:
+      - /Users/rmaheshwari/Documents/CVB/code/sheepdog:/var/www/sheepdog/.
       - ./Secrets/sheepdog_settings.py:/var/www/sheepdog/wsgi.py
       - ./Secrets/sheepdog_creds.json:/var/www/sheepdog/creds.json
       - ./Secrets/config_helper.py:/var/www/sheepdog/config_helper.py
@@ -155,24 +172,27 @@ services:
       - 9300:9300
     networks:
       - devnet
-  pidgin-service:
-    image: "quay.io/cdis/pidgin:master"
-    container_name: pidgin-service
-    networks:
-      - devnet
-    volumes:
-      - ./scripts/waitForContainers.sh:/var/www/data-portal/waitForContainers.sh
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost/_status"]
-      interval: 60s
-      timeout: 5s
-      retries: 3
-    depends_on:
-      - peregrine-service
+#  pidgin-service:
+#    image: "quay.io/cdis/pidgin:master"
+#    container_name: pidgin-service
+#    networks:
+#      - devnet
+#    volumes:
+#      - ./scripts/waitForContainers.sh:/var/www/data-portal/waitForContainers.sh
+#    healthcheck:
+#      test: ["CMD-SHELL", "curl -f http://localhost/_status"]
+#      interval: 60s
+#      timeout: 5s
+#      retries: 3
+#    depends_on:
+#      - peregrine-service
   portal-service:
-    image: "quay.io/cdis/data-portal:master"
+#    image: "quay.io/cdis/data-portal:master"
     container_name: portal-service
-    command: ["bash", "/var/www/data-portal/waitForContainers.sh"]
+    build:
+      context: /Users/rmaheshwari/Documents/CVB/code/BC-UI
+      dockerfile: dev.Dockerfile
+#    command: ["bash", "/var/www/data-portal/waitForContainers.sh"]
     networks:
       - devnet
     volumes:
@@ -180,12 +200,13 @@ services:
       - ./Secrets/gitops.json:/data-portal/data/config/gitops.json
       - ./Secrets/gitops-logo.png:/data-portal/custom/logo/gitops-logo.png
       - ./Secrets/gitops.png:/data-portal/custom/createdby/gitops.png
+      - /Users/rmaheshwari/Documents/CVB/code/BC-UI:/usr/src/app
+      - '/usr/src/app/node_modules'
     environment:
       - NODE_ENV=dev
       #- MOCK_STORE=true
       - APP=gitops
       - GDC_SUBPATH=http://revproxy-service/api/v0/submission/
-
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost"]
       interval: 60s
@@ -195,14 +216,14 @@ services:
       - postgres
       - peregrine-service
       - sheepdog-service
-  jupyter-service:
-    image: "quay.io/occ_data/jupyternotebook:1.7.2"
-    #image: jupyter/minimal-notebook
-    container_name: jupyter-service
-    networks:
-      - devnet
-    volumes:
-      - ./scripts/jupyter_config.py:/home/jovyan/.jupyter/jupyter_notebook_config.py
+#  jupyter-service:
+#    image: "quay.io/occ_data/jupyternotebook:1.7.2"
+#    #image: jupyter/minimal-notebook
+#    container_name: jupyter-service
+#    networks:
+#      - devnet
+#    volumes:
+#      - ./scripts/jupyter_config.py:/home/jovyan/.jupyter/jupyter_notebook_config.py
   revproxy-service:
     image: "quay.io/cdis/nginx:1.15.5-ctds"
     container_name: revproxy-service
@@ -221,12 +242,12 @@ services:
       timeout: 5s
       retries: 3
     depends_on:
-      - indexd-service
+#      - indexd-service
       - peregrine-service
       - sheepdog-service
       - fence-service
       - portal-service
-      - pidgin-service
+#      - pidgin-service
   tube-service:
     image: "quay.io/cdis/tube:master"
     container_name: tube-service
@@ -234,7 +255,7 @@ services:
     networks:
       - devnet
     environment:
-      - DICTIONARY_URL=https://s3.amazonaws.com/dictionary-artifacts/datadictionary/develop/schema.json
+      - DICTIONARY_URL=https://s3.amazonaws.com/dictionary-artifacts/bhcdictionary/2.0.1/schema.json
       - ES_URL=esproxy-service
       - ES_INDEX_NAME=etl
       - HADOOP_URL=hdfs://spark-service:9000
@@ -277,4 +298,4 @@ services:
 networks:
   devnet:
 volumes:
-  psqldata:
+  psqldata6:
